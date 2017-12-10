@@ -36,21 +36,39 @@ public class EmailFixture extends SlimFixture {
     private Store store;
 
     /**
+     * Creates new fixture instance with "imaps" protocol.
+     */
+    public EmailFixture() {
+        this("imaps");
+    }
+
+    /**
+     * Creates new.
+     * @param protocol protocol to use.
+     */
+    public EmailFixture(String protocol) {
+        try {
+            store = getStore(protocol);
+        } catch (NoSuchProviderException e) {
+            throw new StopTestException("Unsupported mail protocol: " + protocol, e);
+        }
+    }
+
+    /**
      * | set imap mail provider with host | <i>host</i> | user | <i>username</i> | password | <i>password</i> |
      */
     public void setImapMailProviderWithHostPortUserPassword(String host, String username, String password) {
         try {
-            store = getStore();
             store.connect(host, username, password);
         } catch (MessagingException e) {
             throw new StopTestException("Cannot connect to mailserver", e);
         }
     }
 
-    protected Store getStore() throws NoSuchProviderException {
+    protected Store getStore(String protocol) throws NoSuchProviderException {
         Properties props = new Properties();
         Session session = Session.getDefaultInstance(props);
-        return session.getStore("imaps");
+        return session.getStore(protocol);
     }
 
     /**
