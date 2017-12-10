@@ -1,10 +1,14 @@
 package nl.hsac.fitnesse.fixture.slim;
 
 import nl.hsac.fitnesse.fixture.slim.exceptions.CouldNotFindMessageException;
+import nl.hsac.fitnesse.fixture.util.ThrowingFunction;
+import nl.hsac.fitnesse.fixture.util.mail.LambdaSearchTerm;
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.mail.Address;
+import javax.mail.Flags;
 import javax.mail.Folder;
 import javax.mail.Message;
 import javax.mail.MessagingException;
@@ -13,9 +17,12 @@ import javax.mail.NoSuchProviderException;
 import javax.mail.Session;
 import javax.mail.Store;
 import javax.mail.internet.MimeMultipart;
+import javax.mail.search.FlagTerm;
 import javax.mail.search.SearchTerm;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -29,10 +36,13 @@ import static java.lang.String.format;
  * Fixture to check for mails received in imap mailbox.
  */
 public class EmailFixture extends SlimFixture {
-    private static Logger LOGGER = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private static final Logger LOGGER = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private static final DateFormat DATE_TIME_FORMATTER = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.S");
+    private static final FlagTerm NON_DELETED_TERM = new FlagTerm(new Flags(Flags.Flag.DELETED), false);
     private Date sentAfter = new Date(System.currentTimeMillis() - 1000 * 60 * 60 * 24);
     private String folder = "inbox";
     private Store store;
+    private Message lastMessage;
 
     /**
      * Creates new fixture instance with "imaps" protocol.
@@ -64,6 +74,72 @@ public class EmailFixture extends SlimFixture {
         }
     }
 
+    public String sentDate() {
+        return applyToLastMessage(m -> DATE_TIME_FORMATTER.format(m.getSentDate()));
+    }
+
+    public String sender() {
+        return applyToLastMessage(m -> String.valueOf(m.getFrom()[0]));
+    }
+
+    public String subject() {
+        return applyToLastMessage(m -> m.getSubject());
+    }
+
+    public String receivedDate() {
+        return applyToLastMessage(m -> DATE_TIME_FORMATTER.format(m.getReceivedDate()));
+    }
+
+    public String toRecipient() {
+        return applyToLastMessage(m -> String.valueOf(m.getRecipients(Message.RecipientType.TO)[0]));
+    }
+
+    public String ccRecipient() {
+        return applyToLastMessage(m -> {
+            Address[] ccRecipients = m.getRecipients(Message.RecipientType.CC);
+            if (ccRecipients.length == 0) {
+                throw new SlimFixtureException(false, "Message has no CC recipients");
+            }
+            return String.valueOf(ccRecipients[0]);
+        });
+    }
+
+    public String body() {
+        String result = bodyText();
+        return getEnvironment().getHtml(result);
+    }
+
+    public String bodyText() {
+        return applyToLastMessage(this::getBody);
+    }
+
+    public boolean retrieveLastMessage() {
+        lastMessage = null;
+        SearchTerm searchTerm = getSearchTerm();
+        try {
+            Message[] messages = openFolder().search(searchTerm);
+            boolean result = messages.length > 0;
+            if (result) {
+                lastMessage = messages[messages.length - 1];
+            }
+            return result;
+        } catch (MessagingException e) {
+            throw new SlimFixtureException("Unable to retrieve messages", e);
+        }
+    }
+
+    protected SearchTerm getSearchTerm() {
+        return NON_DELETED_TERM;
+    }
+
+    protected <T> T applyToLastMessage(ThrowingFunction<Message, T, Exception> function) {
+        T result = null;
+        if (lastMessage != null) {
+            result = function.applyWrapped(lastMessage, SlimFixtureException::new);
+        }
+        return result;
+    }
+
     protected Store getStore(String protocol) throws NoSuchProviderException {
         Properties props = new Properties();
         Session session = Session.getDefaultInstance(props);
@@ -90,13 +166,26 @@ public class EmailFixture extends SlimFixture {
         }
     }
 
-    protected Folder openFolder() throws MessagingException {
-        Folder inbox = store.getFolder(folder);
-        inbox.open(Folder.READ_ONLY);
-        return inbox;
+    protected Folder openFolder() {
+        try {
+            Folder inbox = store.getFolder(folder);
+            inbox.open(Folder.READ_ONLY);
+            return inbox;
+        } catch (MessagingException e) {
+            throw new StopTestException("Unable to open folder: " + folder);
+        }
     }
 
     protected Message getMostRecentMessageMatching(Folder inbox, SearchParameters params) {
+        List<Message> mails = getMessagesMatching(inbox, params);
+        if (mails.isEmpty()) {
+            throw new CouldNotFindMessageException(inbox, params);
+        }
+        Collections.reverse(mails);
+        return getFirstMessageSentAfter(mails, sentAfter);
+    }
+
+    protected Message retrieveUntilMostRecentMessageMatching(Folder inbox, SearchParameters params) {
         List<Message> mails = getMessagesUntilMatchesFound(inbox, params);
         Collections.reverse(mails);
         return getFirstMessageSentAfter(mails, sentAfter);
