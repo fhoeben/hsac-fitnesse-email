@@ -32,7 +32,7 @@ import static java.lang.String.format;
  */
 public class EmailFixture extends SlimFixture {
     private static Logger LOGGER = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-    private static Date HOURS_BACK = new Date(System.currentTimeMillis() - 1000 * 60 * 60 * 24);
+    private Date hoursBack = new Date(System.currentTimeMillis() - 1000 * 60 * 60 * 24);
     private Store store;
 
     /**
@@ -58,7 +58,7 @@ public class EmailFixture extends SlimFixture {
      */
     public String mailReceivedByWithSubject(String receiver, String subject) {
         String recv = cleanupValue(receiver);
-        return getMostRecentMessageBody(new SearchParameters(subject, recv, HOURS_BACK));
+        return getMostRecentMessageBody(new SearchParameters(subject, recv, hoursBack));
     }
 
     /**
@@ -104,7 +104,7 @@ public class EmailFixture extends SlimFixture {
     private Message getMostRecentMessageMatching(Folder inbox, SearchParameters params) {
         List<Message> mails = getMessagesUntilMatchesFound(inbox, params);
         Collections.reverse(mails);
-        return getFirstMessageSentAfter(mails, HOURS_BACK);
+        return getFirstMessageSentAfter(mails, hoursBack);
     }
 
     private Message getFirstMessageSentAfter(List<Message> mails, Date minDate) {
