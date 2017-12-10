@@ -171,14 +171,22 @@ public class EmailFixture extends SlimFixture {
                 @Override
                 public boolean match(Message message) {
                     try {
+                        if (LOGGER.isTraceEnabled()) {
+                            LOGGER.trace("Evaluating message with subject: {}, received: {}, to: {}",
+                                    message.getSubject(), message.getReceivedDate(), getRecipient(message));
+                        }
                         return message.getSubject().contains(subject)
                                 && message.getReceivedDate().after(receivedAfterDate)
-                                && message.getRecipients(Message.RecipientType.TO)[0].toString().contains(receiver);
+                                && getRecipient(message).contains(receiver);
                     } catch (MessagingException ex) {
                         throw new IllegalStateException("No match, message not found.." + ex.getMessage(), ex);
                     }
                 }
             };
+        }
+
+        private static String getRecipient(Message message) throws MessagingException {
+            return message.getRecipients(Message.RecipientType.TO)[0].toString();
         }
 
         @Override
