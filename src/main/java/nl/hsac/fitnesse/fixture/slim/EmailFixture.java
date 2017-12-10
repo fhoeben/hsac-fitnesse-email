@@ -54,9 +54,9 @@ public class EmailFixture extends SlimFixture {
     }
 
     /**
-     * | set imap mail provider with host | <i>host</i> | user | <i>username</i> | password | <i>password</i> |
+     * | connect to host | <i>host</i> | with user | <i>username</i> | and password | <i>password</i> |
      */
-    public void setImapMailProviderWithHostPortUserPassword(String host, String username, String password) {
+    public void connectToHostWithUserAndPassword(String host, String username, String password) {
         try {
             store.connect(host, username, password);
         } catch (MessagingException e) {
