@@ -192,7 +192,8 @@ public class EmailFixture extends SlimFixture {
                             LOGGER.trace("Evaluating message with subject: {}, received: {}, to: {}",
                                     message.getSubject(), message.getReceivedDate(), getRecipient(message));
                         }
-                        return message.getSubject().contains(subject)
+                        return !message.isExpunged()
+                                && message.getSubject().contains(subject)
                                 && message.getReceivedDate().after(receivedAfterDate)
                                 && getRecipient(message).contains(receiver);
                     } catch (MessagingException ex) {
