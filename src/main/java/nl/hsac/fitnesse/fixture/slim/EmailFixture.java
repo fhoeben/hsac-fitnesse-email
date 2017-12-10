@@ -78,7 +78,7 @@ public class EmailFixture extends SlimFixture {
         return getMostRecentMessageBody(new SearchParameters(subject, recv, sentAfter));
     }
 
-    private String getMostRecentMessageBody(SearchParameters params) {
+    protected String getMostRecentMessageBody(SearchParameters params) {
         try {
             Folder folder = openFolder();
             Message msg = getMostRecentMessageMatching(folder, params);
@@ -90,19 +90,19 @@ public class EmailFixture extends SlimFixture {
         }
     }
 
-    private Folder openFolder() throws MessagingException {
+    protected Folder openFolder() throws MessagingException {
         Folder inbox = store.getFolder(folder);
         inbox.open(Folder.READ_ONLY);
         return inbox;
     }
 
-    private Message getMostRecentMessageMatching(Folder inbox, SearchParameters params) {
+    protected Message getMostRecentMessageMatching(Folder inbox, SearchParameters params) {
         List<Message> mails = getMessagesUntilMatchesFound(inbox, params);
         Collections.reverse(mails);
         return getFirstMessageSentAfter(mails, sentAfter);
     }
 
-    private Message getFirstMessageSentAfter(List<Message> mails, Date minDate) {
+    protected Message getFirstMessageSentAfter(List<Message> mails, Date minDate) {
         try {
             for (Message mail : mails) {
                 if (mail.getSentDate().after(minDate)) {
@@ -115,7 +115,7 @@ public class EmailFixture extends SlimFixture {
         throw new SlimFixtureException(false, "No mail found sent after: " + minDate);
     }
 
-    private List<Message> getMessagesUntilMatchesFound(Folder inbox, SearchParameters params) {
+    protected List<Message> getMessagesUntilMatchesFound(Folder inbox, SearchParameters params) {
         List<Message> mails = new ArrayList<>();
         if (!repeatUntilNot(new FunctionalCompletion(
                 mails::isEmpty,
@@ -125,7 +125,7 @@ public class EmailFixture extends SlimFixture {
         return mails;
     }
 
-    private List<Message> getMessagesMatching(Folder inbox, SearchParameters params) {
+    protected List<Message> getMessagesMatching(Folder inbox, SearchParameters params) {
         try {
             SearchTerm searchCondition = params.getSearchTerm();
             return Arrays.asList(inbox.search(searchCondition, inbox.getMessages()));
@@ -134,7 +134,7 @@ public class EmailFixture extends SlimFixture {
         }
     }
 
-    private String getBody(Message msg) {
+    protected String getBody(Message msg) {
         try {
             String message = "";
             if (msg != null) {
@@ -181,7 +181,7 @@ public class EmailFixture extends SlimFixture {
             this.receivedAfterDate = receivedAfterDate;
         }
 
-        private SearchTerm getSearchTerm() {
+        protected SearchTerm getSearchTerm() {
             return new SearchTerm() {
                 private final static long serialVersionUID = -2333952189183496834L;
 
@@ -202,7 +202,7 @@ public class EmailFixture extends SlimFixture {
             };
         }
 
-        private static String getRecipient(Message message) throws MessagingException {
+        protected static String getRecipient(Message message) throws MessagingException {
             return message.getRecipients(Message.RecipientType.TO)[0].toString();
         }
 
