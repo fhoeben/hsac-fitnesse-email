@@ -30,7 +30,8 @@ import static java.lang.String.format;
  */
 public class EmailFixture extends SlimFixture {
     private static Logger LOGGER = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-    private Date hoursBack = new Date(System.currentTimeMillis() - 1000 * 60 * 60 * 24);
+    private Date sentAfter = new Date(System.currentTimeMillis() - 1000 * 60 * 60 * 24);
+    private String folder = "inbox";
     private Store store;
 
     /**
@@ -74,13 +75,13 @@ public class EmailFixture extends SlimFixture {
      */
     public String mailReceivedByWithSubject(String receiver, String subject) {
         String recv = cleanupValue(receiver);
-        return getMostRecentMessageBody(new SearchParameters(subject, recv, hoursBack));
+        return getMostRecentMessageBody(new SearchParameters(subject, recv, sentAfter));
     }
 
     private String getMostRecentMessageBody(SearchParameters params) {
         try {
-            Folder inbox = getInboxFolder();
-            Message msg = getMostRecentMessageMatching(inbox, params);
+            Folder folder = openFolder();
+            Message msg = getMostRecentMessageMatching(folder, params);
             return getBody(msg);
         } catch (SlimFixtureException e) {
             throw e;
@@ -89,8 +90,8 @@ public class EmailFixture extends SlimFixture {
         }
     }
 
-    private Folder getInboxFolder() throws MessagingException {
-        Folder inbox = store.getFolder("inbox");
+    private Folder openFolder() throws MessagingException {
+        Folder inbox = store.getFolder(folder);
         inbox.open(Folder.READ_ONLY);
         return inbox;
     }
@@ -98,7 +99,7 @@ public class EmailFixture extends SlimFixture {
     private Message getMostRecentMessageMatching(Folder inbox, SearchParameters params) {
         List<Message> mails = getMessagesUntilMatchesFound(inbox, params);
         Collections.reverse(mails);
-        return getFirstMessageSentAfter(mails, hoursBack);
+        return getFirstMessageSentAfter(mails, sentAfter);
     }
 
     private Message getFirstMessageSentAfter(List<Message> mails, Date minDate) {
@@ -151,6 +152,22 @@ public class EmailFixture extends SlimFixture {
         } catch (MessagingException ex) {
             throw new RuntimeException("Unable to get body of message", ex);
         }
+    }
+
+    public Date getSentAfter() {
+        return sentAfter;
+    }
+
+    public void setSentAfter(Date sentAfter) {
+        this.sentAfter = sentAfter;
+    }
+
+    public void setFolder(String folder) {
+        this.folder = folder;
+    }
+
+    public String getFolder() {
+        return folder;
     }
 
     public static class SearchParameters {
