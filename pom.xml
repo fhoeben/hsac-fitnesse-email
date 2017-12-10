@@ -6,7 +6,7 @@
 
     <groupId>nl.hsac</groupId>
     <artifactId>hsac-fitnesse-email</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
     <url>https://github.com/fhoeben/hsac-fitnesse-email</url>
     <name>Fixtures to work with emails in FitNesse</name>
     <description>Fixtures to work with emails in FitNesse</description>
