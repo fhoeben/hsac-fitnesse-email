@@ -130,8 +130,16 @@ public class EmailFixture extends SlimFixture {
         }
     }
 
-    public boolean retrieveMessagesUntilMatchFound() {
+    public boolean retrieveUntilMessageFound() {
         return repeatUntil(new FunctionalCompletion(this::retrieveLastMessage));
+    }
+
+    public boolean waitUntilMessageFound() {
+        if (!retrieveUntilMessageFound()) {
+            throw new StopTestException(false, "No message found matching criteria. Tried: " + repeatCount()
+                    + " times, for: " + timeSpentRepeating() + "ms.");
+        }
+        return true;
     }
 
     protected SearchTerm getSearchTerm() {

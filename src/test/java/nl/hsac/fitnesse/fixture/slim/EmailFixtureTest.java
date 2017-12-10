@@ -8,6 +8,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class EmailFixtureTest {
     private EmailFixture fixture = new EmailFixture();
@@ -45,7 +46,7 @@ public class EmailFixtureTest {
         fixture.onlyMessagesReceivedAfter(null);
         fixture.onlyMessagesSentTo(null);
         fixture.onlyMessagesWithSubject("Testje");
-        boolean found = fixture.retrieveMessagesUntilMatchFound();
+        boolean found = fixture.retrieveUntilMessageFound();
 
         assertTrue("Expected at least one message", found);
 
@@ -56,10 +57,10 @@ public class EmailFixtureTest {
 
     @Test
     public void testRetrieveMessagesUntilMatchFoundNoneFound() {
-        fixture.setRepeatIntervalToMilliseconds(100);
+        fixture.setRepeatIntervalToMilliseconds(60);
         fixture.repeatAtMostTimes(2);
         fixture.onlyMessagesSentTo("asdasdad");
-        boolean found = fixture.retrieveMessagesUntilMatchFound();
+        boolean found = fixture.retrieveUntilMessageFound();
 
         assertEquals("Expected repeat count", 2, fixture.repeatCount());
         assertFalse("Expected no message", found);
@@ -72,6 +73,22 @@ public class EmailFixtureTest {
         assertNull("toRecipient", fixture.toRecipient());
         assertNull("bodyText", fixture.bodyText());
         assertNull("body", fixture.body());
+    }
+
+    @Test
+    public void testWaitUntilMatchFoundNoneFound() {
+        fixture.setRepeatIntervalToMilliseconds(50);
+        fixture.repeatAtMostTimes(3);
+        fixture.onlyMessagesSentTo("assadasdgagsjddasdad");
+        try {
+            boolean found = fixture.waitUntilMessageFound();
+            fail("Expected exception got: " + fixture.subject());
+        } catch (StopTestException e) {
+            String message = e.getMessage();
+            assertNotNull(message);
+            assertTrue("Bad message: " + message,
+                        message.startsWith("message:<<No message found matching criteria. Tried: 3 times, for: "));
+        }
     }
 
     private String getPassword() {
