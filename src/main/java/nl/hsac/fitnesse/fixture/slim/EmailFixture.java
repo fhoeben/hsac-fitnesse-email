@@ -22,8 +22,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static java.lang.String.format;
 
@@ -77,28 +75,6 @@ public class EmailFixture extends SlimFixture {
     public String mailReceivedByWithSubject(String receiver, String subject) {
         String recv = cleanupValue(receiver);
         return getMostRecentMessageBody(new SearchParameters(subject, recv, hoursBack));
-    }
-
-    /**
-     * | $result= | extract text with | <i>regex</i> | from mail received by | <i>receiver</i> | with subject | <i>subject</i> |
-     */
-    public String extractTextWithFromMailReceivedByWithSubject(String regex, String receiver, String subject) {
-        String text = mailReceivedByWithSubject(subject, receiver);
-        return extractFirstRegexGroup(text, regex);
-    }
-
-    private String extractFirstRegexGroup(String text, String regexPattern) {
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Text found: " + text);
-            LOGGER.debug("Regex: " + regexPattern);
-        }
-        Pattern pattern = Pattern.compile(regexPattern);
-        Matcher matcher = pattern.matcher(text);
-        boolean isMatch = matcher.find();
-        if (isMatch) {
-            return matcher.group(1);
-        }
-        throw new SlimFixtureException(false, format("No match found in text %s with regex %s", text, regexPattern));
     }
 
     private String getMostRecentMessageBody(SearchParameters params) {
