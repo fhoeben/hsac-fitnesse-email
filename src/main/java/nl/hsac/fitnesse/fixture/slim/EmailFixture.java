@@ -1,11 +1,8 @@
 package nl.hsac.fitnesse.fixture.slim;
 
-import nl.hsac.fitnesse.fixture.slim.exceptions.CouldNotFindMessageException;
 import nl.hsac.fitnesse.fixture.util.ThrowingFunction;
-import nl.hsac.fitnesse.fixture.util.mail.LambdaSearchTerm;
 import org.apache.commons.io.IOUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.commons.lang3.StringUtils;
 
 import javax.mail.Address;
 import javax.mail.Flags;
@@ -17,32 +14,33 @@ import javax.mail.NoSuchProviderException;
 import javax.mail.Session;
 import javax.mail.Store;
 import javax.mail.internet.MimeMultipart;
+import javax.mail.search.AndTerm;
+import javax.mail.search.ComparisonTerm;
 import javax.mail.search.FlagTerm;
+import javax.mail.search.ReceivedDateTerm;
+import javax.mail.search.RecipientStringTerm;
 import javax.mail.search.SearchTerm;
+import javax.mail.search.SubjectTerm;
 import java.io.IOException;
-import java.lang.invoke.MethodHandles;
 import java.text.DateFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Date;
-import java.util.List;
 import java.util.Properties;
-
-import static java.lang.String.format;
 
 /**
  * Fixture to check for mails received in imap mailbox.
  */
 public class EmailFixture extends SlimFixture {
-    private static final Logger LOGGER = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-    private static final DateFormat DATE_TIME_FORMATTER = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.S");
-    private static final FlagTerm NON_DELETED_TERM = new FlagTerm(new Flags(Flags.Flag.DELETED), false);
-    private Date sentAfter = new Date(System.currentTimeMillis() - 1000 * 60 * 60 * 24);
+    protected static final DateFormat DATE_TIME_FORMATTER = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    protected static final FlagTerm NON_DELETED_TERM = new FlagTerm(new Flags(Flags.Flag.DELETED), false);
     private String folder = "inbox";
     private Store store;
     private Message lastMessage;
+
+    private Date receivedAfter = new Date(System.currentTimeMillis() - 1000 * 60 * 60 * 24);
+    private String expectedTo;
+    private String expectedSubject;
 
     /**
      * Creates new fixture instance with "imaps" protocol.
@@ -56,11 +54,15 @@ public class EmailFixture extends SlimFixture {
      * @param protocol protocol to use.
      */
     public EmailFixture(String protocol) {
-        try {
-            store = getStore(protocol);
-        } catch (NoSuchProviderException e) {
-            throw new StopTestException("Unsupported mail protocol: " + protocol, e);
-        }
+        this(getStore(protocol));
+    }
+
+    /**
+     * Creates new.
+     * @param store store to use.
+     */
+    public EmailFixture(Store store) {
+        this.store = store;
     }
 
     /**
@@ -128,8 +130,22 @@ public class EmailFixture extends SlimFixture {
         }
     }
 
+    public boolean retrieveMessagesUntilMatchFound() {
+        return repeatUntil(new FunctionalCompletion(this::retrieveLastMessage));
+    }
+
     protected SearchTerm getSearchTerm() {
-        return NON_DELETED_TERM;
+        SearchTerm term = NON_DELETED_TERM;
+        if (receivedAfter != null) {
+            term = new AndTerm(term, new ReceivedDateTerm(ComparisonTerm.GT, receivedAfter));
+        }
+        if (expectedSubject != null) {
+            term = new AndTerm(term, new SubjectTerm(expectedSubject));
+        }
+        if (expectedTo != null) {
+            term = new AndTerm(term, new RecipientStringTerm(Message.RecipientType.TO, expectedTo));
+        }
+        return term;
     }
 
     protected <T> T applyToLastMessage(ThrowingFunction<Message, T, Exception> function) {
@@ -140,29 +156,17 @@ public class EmailFixture extends SlimFixture {
         return result;
     }
 
-    protected Store getStore(String protocol) throws NoSuchProviderException {
+    protected Message getLastMessage() {
+        return lastMessage;
+    }
+
+    protected static Store getStore(String protocol) {
         Properties props = new Properties();
         Session session = Session.getDefaultInstance(props);
-        return session.getStore(protocol);
-    }
-
-    /**
-     * | show | mail received by | <i>receiver</i> | with subject | <i>subject</i> |
-     */
-    public String mailReceivedByWithSubject(String receiver, String subject) {
-        String recv = cleanupValue(receiver);
-        return getMostRecentMessageBody(new SearchParameters(subject, recv, sentAfter));
-    }
-
-    protected String getMostRecentMessageBody(SearchParameters params) {
         try {
-            Folder folder = openFolder();
-            Message msg = getMostRecentMessageMatching(folder, params);
-            return getBody(msg);
-        } catch (SlimFixtureException e) {
-            throw e;
-        } catch (Exception ex) {
-            throw new SlimFixtureException(false, "No message found with search params: " + params, ex);
+            return session.getStore(protocol);
+        } catch (NoSuchProviderException e) {
+            throw new StopTestException("Unsupported mail protocol: " + protocol, e);
         }
     }
 
@@ -173,53 +177,6 @@ public class EmailFixture extends SlimFixture {
             return inbox;
         } catch (MessagingException e) {
             throw new StopTestException("Unable to open folder: " + folder);
-        }
-    }
-
-    protected Message getMostRecentMessageMatching(Folder inbox, SearchParameters params) {
-        List<Message> mails = getMessagesMatching(inbox, params);
-        if (mails.isEmpty()) {
-            throw new CouldNotFindMessageException(inbox, params);
-        }
-        Collections.reverse(mails);
-        return getFirstMessageSentAfter(mails, sentAfter);
-    }
-
-    protected Message retrieveUntilMostRecentMessageMatching(Folder inbox, SearchParameters params) {
-        List<Message> mails = getMessagesUntilMatchesFound(inbox, params);
-        Collections.reverse(mails);
-        return getFirstMessageSentAfter(mails, sentAfter);
-    }
-
-    protected Message getFirstMessageSentAfter(List<Message> mails, Date minDate) {
-        try {
-            for (Message mail : mails) {
-                if (mail.getSentDate().after(minDate)) {
-                    return mail;
-                }
-            }
-        } catch (MessagingException ex) {
-            throw new RuntimeException("Exception looking for mail sent after: " + minDate, ex);
-        }
-        throw new SlimFixtureException(false, "No mail found sent after: " + minDate);
-    }
-
-    protected List<Message> getMessagesUntilMatchesFound(Folder inbox, SearchParameters params) {
-        List<Message> mails = new ArrayList<>();
-        if (!repeatUntilNot(new FunctionalCompletion(
-                mails::isEmpty,
-                () -> mails.addAll(getMessagesMatching(inbox, params))))) {
-            throw new CouldNotFindMessageException(inbox, params);
-        }
-        return mails;
-    }
-
-    protected List<Message> getMessagesMatching(Folder inbox, SearchParameters params) {
-        try {
-            SearchTerm searchCondition = params.getSearchTerm();
-            return Arrays.asList(inbox.search(searchCondition, inbox.getMessages()));
-        } catch (MessagingException ex) {
-            throw new RuntimeException("Exception retrieving mail with parameters: " + params, ex);
         }
     }
 
@@ -243,12 +200,37 @@ public class EmailFixture extends SlimFixture {
         }
     }
 
-    public Date getSentAfter() {
-        return sentAfter;
+    public Date getReceivedAfter() {
+        return receivedAfter;
     }
 
-    public void setSentAfter(Date sentAfter) {
-        this.sentAfter = sentAfter;
+    public void setReceivedAfter(Date receivedAfter) {
+        this.receivedAfter = receivedAfter;
+    }
+
+    public void onlyMessagesReceivedAfter(String date) {
+        try {
+            Date rDate = StringUtils.isEmpty(date) ? null : DATE_TIME_FORMATTER.parse(date);
+            setReceivedAfter(rDate);
+        } catch (ParseException e) {
+            throw new SlimFixtureException(false, "Unable to parse date: " + date, e);
+        }
+    }
+
+    public String getExpectedTo() {
+        return expectedTo;
+    }
+
+    public void onlyMessagesSentTo(String expectedTo) {
+        this.expectedTo = cleanupValue(expectedTo);
+    }
+
+    public String getExpectedSubject() {
+        return expectedSubject;
+    }
+
+    public void onlyMessagesWithSubject(String expectedSubject) {
+        this.expectedSubject = expectedSubject;
     }
 
     public void setFolder(String folder) {
@@ -259,46 +241,7 @@ public class EmailFixture extends SlimFixture {
         return folder;
     }
 
-    public static class SearchParameters {
-        private String subject;
-        private String receiver;
-        private Date receivedAfterDate;
-
-        public SearchParameters(String subject, String receiver, Date receivedAfterDate) {
-            this.subject = subject;
-            this.receiver = receiver;
-            this.receivedAfterDate = receivedAfterDate;
-        }
-
-        protected SearchTerm getSearchTerm() {
-            return new SearchTerm() {
-                private final static long serialVersionUID = -2333952189183496834L;
-
-                @Override
-                public boolean match(Message message) {
-                    try {
-                        if (LOGGER.isTraceEnabled()) {
-                            LOGGER.trace("Evaluating message with subject: {}, received: {}, to: {}",
-                                    message.getSubject(), message.getReceivedDate(), getRecipient(message));
-                        }
-                        return !message.isExpunged()
-                                && message.getSubject().contains(subject)
-                                && message.getReceivedDate().after(receivedAfterDate)
-                                && getRecipient(message).contains(receiver);
-                    } catch (MessagingException ex) {
-                        throw new IllegalStateException("No match, message not found.." + ex.getMessage(), ex);
-                    }
-                }
-            };
-        }
-
-        protected static String getRecipient(Message message) throws MessagingException {
-            return message.getRecipients(Message.RecipientType.TO)[0].toString();
-        }
-
-        @Override
-        public String toString() {
-            return format("subject='%s', receiver='%s', receivedAfterDate='%s'", subject, receiver, receivedAfterDate);
-        }
+    protected Store getStore() {
+        return store;
     }
 }

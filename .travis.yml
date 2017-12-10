@@ -6,7 +6,7 @@ cache:
   directories:
   - $HOME/.m2
 
-script: mvn test
+script: mvn test -DemailPassword=${PASSWORD}
 
 after_success:
   - "[[ $TRAVIS_BRANCH == \"master\" ]] && { python addServer.py; mvn -DskipTests deploy --settings ~/.m2/mySettings.xml; };"
