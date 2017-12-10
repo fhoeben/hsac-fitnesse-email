@@ -4,7 +4,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class EmailFixtureTest {
@@ -50,6 +52,26 @@ public class EmailFixtureTest {
         assertEquals("Expected message to be available immediately", 0, fixture.repeatCount());
         assertEquals(fixture.getExpectedSubject(), fixture.subject());
         assertEquals("Andere test\r\n", fixture.bodyText());
+    }
+
+    @Test
+    public void testRetrieveMessagesUntilMatchFoundNoneFound() {
+        fixture.setRepeatIntervalToMilliseconds(100);
+        fixture.repeatAtMostTimes(2);
+        fixture.onlyMessagesSentTo("asdasdad");
+        boolean found = fixture.retrieveMessagesUntilMatchFound();
+
+        assertEquals("Expected repeat count", 2, fixture.repeatCount());
+        assertFalse("Expected no message", found);
+
+        // ensure no exceptions thrown
+        assertNull("subject", fixture.subject());
+        assertNull("sender", fixture.sender());
+        assertNull("sent date", fixture.sentDate());
+        assertNull("received date", fixture.receivedDate());
+        assertNull("toRecipient", fixture.toRecipient());
+        assertNull("bodyText", fixture.bodyText());
+        assertNull("body", fixture.body());
     }
 
     private String getPassword() {
