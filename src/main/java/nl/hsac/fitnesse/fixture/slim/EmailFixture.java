@@ -1,7 +1,6 @@
 package nl.hsac.fitnesse.fixture.slim;
 
 import nl.hsac.fitnesse.fixture.util.ThrowingFunction;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import javax.mail.Address;
@@ -195,7 +194,7 @@ public class EmailFixture extends SlimFixture {
                 Object msgContent = msg.getContent();
                 if (msgContent instanceof MimeMultipart) {
                     Multipart multipart = (Multipart) msgContent;
-                    message = IOUtils.toString(multipart.getBodyPart(0).getInputStream());
+                    message = (String) multipart.getBodyPart(0).getContent();
                 } else {
                     message = msgContent.toString();
                 }
