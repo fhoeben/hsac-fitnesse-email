@@ -1,17 +1,10 @@
 package nl.hsac.fitnesse.fixture.slim;
 
 import nl.hsac.fitnesse.fixture.util.ThrowingFunction;
+import nl.hsac.fitnesse.fixture.util.mail.ImapAttachment;
 import org.apache.commons.lang3.StringUtils;
 
-import javax.mail.Address;
-import javax.mail.Flags;
-import javax.mail.Folder;
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.Multipart;
-import javax.mail.NoSuchProviderException;
-import javax.mail.Session;
-import javax.mail.Store;
+import javax.mail.*;
 import javax.mail.internet.MimeMultipart;
 import javax.mail.search.AndTerm;
 import javax.mail.search.ComparisonTerm;
@@ -20,26 +13,37 @@ import javax.mail.search.ReceivedDateTerm;
 import javax.mail.search.RecipientStringTerm;
 import javax.mail.search.SearchTerm;
 import javax.mail.search.SubjectTerm;
+import java.io.File;
 import java.io.IOException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Properties;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 /**
  * Fixture to check for mails received in imap mailbox.
  */
 public class EmailFixture extends SlimFixture {
+    private String attachmentBase = new File(filesDir, "attachment").getPath() + "/";
     protected static final DateFormat DATE_TIME_FORMATTER = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     protected static final FlagTerm NON_DELETED_TERM = new FlagTerm(new Flags(Flags.Flag.DELETED), false);
     private String folder = "inbox";
     private Store store;
     private Message lastMessage;
+    private int folderReadWrite = Folder.READ_ONLY;
 
     private Date receivedAfter = new Date(System.currentTimeMillis() - 1000 * 60 * 60 * 24);
     private String expectedTo;
     private String expectedSubject;
+
+    private String messagePlain;
+    private String messageHtml;
+    private List<ImapAttachment> messageAttachments = new ArrayList();
 
     /**
      * Creates new fixture instance with "imaps" protocol.
@@ -74,6 +78,10 @@ public class EmailFixture extends SlimFixture {
             throw new StopTestException("Cannot connect to mailserver", e);
         }
     }
+    public void connectToHostWithUserAndPasswordWithWrite(String host, String username, String password) {
+       connectToHostWithUserAndPassword(host,username,password);
+       folderReadWrite = Folder.READ_WRITE;
+    }
 
     public String sentDate() {
         return applyToLastMessage(m -> DATE_TIME_FORMATTER.format(m.getSentDate()));
@@ -105,25 +113,88 @@ public class EmailFixture extends SlimFixture {
         });
     }
 
+    public ArrayList<String> listAttachments() {
+        ArrayList<String> values = null;
+        if(messageAttachments.size() > 0) {
+            values = new ArrayList<>();
+            for (ImapAttachment ia : messageAttachments) values.add(ia.getFileName());
+        }
+        return values;
+    }
+
+    public String saveAttachmentByNumber(int number)
+    {
+        if(number < messageAttachments.size()) {
+            return impSaveAttachment(messageAttachments.get(number));
+        }
+        else throw new SlimFixtureException("There are only "+ messageAttachments.size() + " attachments");
+    }
+
+    public String saveAttachmentByFilename(String filename)
+    {
+        for(ImapAttachment ia: messageAttachments) {
+            if(StringUtils.equals(ia.getFileName(), filename)) return impSaveAttachment(ia);
+        }
+        throw new SlimFixtureException("There is no file with" + filename + " attachments");
+    }
+    private String impSaveAttachment(ImapAttachment ia) {
+        try {
+            return createFile(attachmentBase, ia.getFileName(), ia.getBytes());
+        } catch (IOException ex) {
+            throw new RuntimeException("Unable to readstream", ex);
+        }
+    }
+
     public String body() {
         String result = bodyText();
         return getEnvironment().getHtml(result);
     }
 
     public String bodyText() {
-        return applyToLastMessage(this::getBody);
+        return messageHtml;
+    }
+
+    public String bodyPlain() {
+        return messagePlain;
+    }
+
+    private void handleParts(Part part) {
+        try {
+            if (part == null) return;
+            String disposition = part.getDisposition();
+            if (Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
+                messageAttachments.add(new ImapAttachment(part));
+            } else {
+                Object content = part.getContent();
+                if (content instanceof MimeMultipart) {
+                    Multipart multipart = (Multipart) content;
+                    for (int i = 0; i < multipart.getCount(); i++) {
+                        handleParts(multipart.getBodyPart(i));
+                    }
+                } else if (content instanceof String) {
+                    if (part.isMimeType("text/html")) messageHtml = (String)content;
+                    else messagePlain = (String)content;
+                } else throw new RuntimeException("Unknown content type " + content.getClass());
+            }
+        } catch (IOException ex) {
+            throw new RuntimeException("Unable to get body of message", ex);
+        } catch (MessagingException ex) {
+            throw new RuntimeException("Unable to get body of message", ex);
+        }
     }
 
     public boolean retrieveLastMessage() {
         lastMessage = null;
+        Message[] messages = retrieveMessages();
+        boolean result = messages.length > 0;
+        setLastMessage(result ? messages[messages.length - 1]: null  );
+        return result;
+    }
+
+    protected Message[] retrieveMessages() {
         SearchTerm searchTerm = getSearchTerm();
         try {
-            Message[] messages = openFolder().search(searchTerm);
-            boolean result = messages.length > 0;
-            if (result) {
-                lastMessage = messages[messages.length - 1];
-            }
-            return result;
+            return openFolder().search(searchTerm);
         } catch (MessagingException e) {
             throw new SlimFixtureException("Unable to retrieve messages", e);
         }
@@ -167,6 +238,13 @@ public class EmailFixture extends SlimFixture {
         return lastMessage;
     }
 
+    protected void setLastMessage(Message lastMessage) {
+        messagePlain = messageHtml = "";
+        messageAttachments.clear();
+        this.lastMessage = lastMessage;
+        handleParts(lastMessage);
+    }
+
     protected static Store getStore(String protocol) {
         Properties props = new Properties();
         Session session = Session.getDefaultInstance(props);
@@ -180,7 +258,7 @@ public class EmailFixture extends SlimFixture {
     protected Folder openFolder() {
         try {
             Folder inbox = store.getFolder(folder);
-            inbox.open(Folder.READ_ONLY);
+            inbox.open(folderReadWrite);
             return inbox;
         } catch (MessagingException e) {
             throw new StopTestException("Unable to open folder: " + folder);
@@ -188,23 +266,7 @@ public class EmailFixture extends SlimFixture {
     }
 
     protected String getBody(Message msg) {
-        try {
-            String message = "";
-            if (msg != null) {
-                Object msgContent = msg.getContent();
-                if (msgContent instanceof MimeMultipart) {
-                    Multipart multipart = (Multipart) msgContent;
-                    message = (String) multipart.getBodyPart(0).getContent();
-                } else {
-                    message = msgContent.toString();
-                }
-            }
-            return message;
-        } catch (IOException ex) {
-            throw new RuntimeException("Unable to get body of message", ex);
-        } catch (MessagingException ex) {
-            throw new RuntimeException("Unable to get body of message", ex);
-        }
+        return messageHtml;
     }
 
     public Date getReceivedAfter() {
@@ -248,7 +310,46 @@ public class EmailFixture extends SlimFixture {
         return folder;
     }
 
+    public ArrayList<String> getFolders() {
+        try {
+            ArrayList<String> folders = new ArrayList<>();
+            handleListFolders(this.store.getDefaultFolder(),"",folders);
+            return folders;
+        }
+        catch (MessagingException ex) {
+            throw new RuntimeException("Unable to get default folder", ex);
+        }
+    }
+
+    private void handleListFolders(Folder folder, String base, List<String> folders) throws MessagingException  {
+        String name = base + folder.getName();
+        if(!name.isEmpty()) folders.add(name);
+        for(Folder f : folder.list()) {
+            String b = name.isEmpty() ? "" : name+"/";
+            handleListFolders(f, b, folders);
+        }
+    }
+
     protected Store getStore() {
         return store;
+    }
+
+    public Boolean moveLastMessageToFolder(String folder ) {
+        return moveMessage(lastMessage,folder, true);
+    }
+
+    protected Boolean moveMessage(Message message, String toFolderPath, boolean createIfNotExist) {
+        try {
+            Message[] messages = {message};
+            Folder fromFolder = message.getFolder();
+            Folder toFolder = message.getFolder().getStore().getFolder(toFolderPath);
+            if (!toFolder.exists() && createIfNotExist) toFolder.create(Folder.HOLDS_FOLDERS | Folder.HOLDS_MESSAGES);
+            fromFolder.copyMessages(messages, toFolder);
+            fromFolder.setFlags(messages, new Flags(Flags.Flag.DELETED), true);
+            fromFolder.expunge();
+            return true;
+        } catch (MessagingException ex) {
+            throw new RuntimeException("Unable to move the message", ex);
+        }
     }
 }
