@@ -18,10 +18,7 @@ import java.io.IOException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
@@ -194,7 +191,15 @@ public class EmailFixture extends SlimFixture {
     protected Message[] retrieveMessages() {
         SearchTerm searchTerm = getSearchTerm();
         try {
-            return openFolder().search(searchTerm);
+            Message[] messages = openFolder().search(searchTerm);
+            return (Message[])Arrays.stream(messages).filter(x -> {
+                try {
+                    return x.getReceivedDate().after(receivedAfter);
+                }
+                catch (MessagingException ex) {
+                    throw new RuntimeException("Unable to get received date", ex);
+                }
+            }).collect(Collectors.toList()).toArray();
         } catch (MessagingException e) {
             throw new SlimFixtureException("Unable to retrieve messages", e);
         }
@@ -215,7 +220,7 @@ public class EmailFixture extends SlimFixture {
     protected SearchTerm getSearchTerm() {
         SearchTerm term = NON_DELETED_TERM;
         if (receivedAfter != null) {
-            term = new AndTerm(term, new ReceivedDateTerm(ComparisonTerm.GT, receivedAfter));
+            term = getReceivedAfterTerm(term);
         }
         if (expectedSubject != null) {
             term = new AndTerm(term, new SubjectTerm(expectedSubject));
@@ -224,6 +229,14 @@ public class EmailFixture extends SlimFixture {
             term = new AndTerm(term, new RecipientStringTerm(Message.RecipientType.TO, expectedTo));
         }
         return term;
+    }
+
+    protected SearchTerm getReceivedAfterTerm(SearchTerm term) {
+        //Work around to IMAP not dealing with time part
+        Calendar c = Calendar.getInstance();
+        c.setTime(this.receivedAfter);
+        c.add(Calendar.DATE, -1);
+        return new AndTerm(term, new ReceivedDateTerm(ComparisonTerm.GT, c.getTime()));
     }
 
     protected <T> T applyToLastMessage(ThrowingFunction<Message, T, Exception> function) {
