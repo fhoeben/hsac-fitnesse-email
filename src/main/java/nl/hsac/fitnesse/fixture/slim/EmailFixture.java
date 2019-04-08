@@ -183,7 +183,7 @@ public class EmailFixture extends SlimFixture {
     public boolean retrieveLastMessage() {
         lastMessage = null;
         Message[] messages = retrieveMessages();
-        boolean result = messages.length > 0;
+        boolean result = (messages != null && messages.length > 0);
         setLastMessage(result ? messages[messages.length - 1]: null  );
         return result;
     }
@@ -191,7 +191,9 @@ public class EmailFixture extends SlimFixture {
     protected Message[] retrieveMessages() {
         SearchTerm searchTerm = getSearchTerm();
         try {
-            Message[] messages = openFolder().search(searchTerm);
+            Folder f = openFolder();
+            Message[] messages = f.search(searchTerm);
+            if(messages.length == 0 ) { f.close(); return null; }
             return (Message[])Arrays.stream(messages).filter(x -> {
                 try {
                     return x.getReceivedDate().after(receivedAfter);
