@@ -78,7 +78,11 @@ public class EmailFixture extends SlimFixture {
     }
     public void connectToHostWithUserAndPasswordWithWrite(String host, String username, String password) {
        connectToHostWithUserAndPassword(host,username,password);
-       folderReadWrite = Folder.READ_WRITE;
+       setFolderReadWrite(Folder.READ_WRITE);
+    }
+
+    protected void setFolderReadWrite(int folderReadWrite) {
+        this.folderReadWrite = folderReadWrite;
     }
 
     public String sentDate() {
@@ -303,7 +307,7 @@ public class EmailFixture extends SlimFixture {
             throw new StopTestException("Unable to close folder: " + folder);
         }
     }
-    
+
     protected Folder getCurrentFolder() {
         return currentFolder;
     }
