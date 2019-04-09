@@ -16,8 +16,15 @@ public class ImapAttachment {
         this.fileName = p.getFileName();
     }
 
-    public String getFileName() { return this.fileName; }
-    public InputStream getStream() { return this.stream; }
+    public String getFileName() {
+        return this.fileName;
+    }
 
-    public byte[] getBytes() throws IOException  {return IOUtils.toByteArray(this.stream); }
+    public InputStream getStream() {
+        return this.stream;
+    }
+
+    public byte[] getBytes() throws IOException  {
+        return IOUtils.toByteArray(this.stream);
+    }
 }

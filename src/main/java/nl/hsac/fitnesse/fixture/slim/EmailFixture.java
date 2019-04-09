@@ -110,35 +110,41 @@ public class EmailFixture extends SlimFixture {
         });
     }
 
-    public ArrayList<String> listAttachments() {
+    public ArrayList<String> attachmentNames() {
         ArrayList<String> values = null;
-        if(messageAttachments.size() > 0) {
+        if (messageAttachments.size() > 0) {
             values = new ArrayList<>();
-            for (ImapAttachment ia : messageAttachments) values.add(ia.getFileName());
+            for (ImapAttachment ia : messageAttachments) {
+                values.add(ia.getFileName());
+            }
         }
         return values;
     }
 
-    public String saveAttachmentByNumber(int number)
+    public String saveAttachmentNumber(int number)
     {
-        if(number < messageAttachments.size()) {
+        if (number < messageAttachments.size()) {
             return impSaveAttachment(messageAttachments.get(number));
         }
-        else throw new SlimFixtureException("There are only "+ messageAttachments.size() + " attachments");
+        else {
+            throw new SlimFixtureException(false, "There are only "+ messageAttachments.size() + " attachments");
+        }
     }
 
-    public String saveAttachmentByFilename(String filename)
+    public String saveAttachmentNamed(String filename)
     {
-        for(ImapAttachment ia: messageAttachments) {
-            if(StringUtils.equals(ia.getFileName(), filename)) return impSaveAttachment(ia);
+        for (ImapAttachment ia: messageAttachments) {
+            if (StringUtils.equals(ia.getFileName(), filename)) {
+                return impSaveAttachment(ia);
+            }
         }
-        throw new SlimFixtureException("There is no file with" + filename + " attachments");
+        throw new SlimFixtureException(false, "There is no attachment called " + filename);
     }
     private String impSaveAttachment(ImapAttachment ia) {
         try {
             return createFile(attachmentBase, ia.getFileName(), ia.getBytes());
         } catch (IOException ex) {
-            throw new RuntimeException("Unable to readstream", ex);
+            throw new SlimFixtureException("Unable to extract: " + ia.getFileName(), ex);
         }
     }
 
@@ -169,39 +175,45 @@ public class EmailFixture extends SlimFixture {
                         handleParts(multipart.getBodyPart(i));
                     }
                 } else if (content instanceof String) {
-                    if (part.isMimeType("text/html")) messageHtml = (String)content;
-                    else messagePlain = (String)content;
-                } else throw new RuntimeException("Unknown content type " + content.getClass());
+                    if (part.isMimeType("text/html")) {
+                        messageHtml = (String)content;
+                    }
+                    else {
+                        messagePlain = (String)content;
+                    }
+                } else {
+                    throw new SlimFixtureException(false, "Unknown content type " + content.getClass());
+                }
             }
         } catch (IOException ex) {
-            throw new RuntimeException("Unable to get body of message", ex);
+            throw new SlimFixtureException("Unable to get body of message", ex);
         } catch (MessagingException ex) {
-            throw new RuntimeException("Unable to get body of message", ex);
+            throw new SlimFixtureException("Unable to get body of message", ex);
         }
     }
 
     public boolean retrieveLastMessage() {
-        lastMessage = null;
-        Message[] messages = retrieveMessages();
-        boolean result = (messages != null && messages.length > 0);
-        setLastMessage(result ? messages[messages.length - 1]: null  );
+        List<Message> messages = retrieveMessages();
+        boolean result = (messages != null && messages.size() > 0);
+        setLastMessage(result? messages.get(messages.size() - 1): null);
         return result;
     }
 
-    protected Message[] retrieveMessages() {
+    protected List<Message> retrieveMessages() {
         SearchTerm searchTerm = getSearchTerm();
         try {
             Folder f = openFolder();
             Message[] messages = f.search(searchTerm);
-            if(messages.length == 0 ) { f.close(); return null; }
-            return (Message[])Arrays.stream(messages).filter(x -> {
+            if(messages.length == 0 ) { f.close(); return Collections.emptyList(); }
+            if(receivedAfter == null) return Arrays.asList(messages);
+            return Arrays.stream(messages).filter(x -> {
                 try {
                     return x.getReceivedDate().after(receivedAfter);
                 }
                 catch (MessagingException ex) {
                     throw new RuntimeException("Unable to get received date", ex);
                 }
-            }).collect(Collectors.toList()).toArray();
+            }).collect(Collectors.toList());
         } catch (MessagingException e) {
             throw new SlimFixtureException("Unable to retrieve messages", e);
         }
@@ -332,15 +344,15 @@ public class EmailFixture extends SlimFixture {
             return folders;
         }
         catch (MessagingException ex) {
-            throw new RuntimeException("Unable to get default folder", ex);
+            throw new SlimFixtureException("Unable to get default folder", ex);
         }
     }
 
     private void handleListFolders(Folder folder, String base, List<String> folders) throws MessagingException  {
         String name = base + folder.getName();
+        String b = name.isEmpty() ? "" : name + "/";
         if(!name.isEmpty()) folders.add(name);
         for(Folder f : folder.list()) {
-            String b = name.isEmpty() ? "" : name+"/";
             handleListFolders(f, b, folders);
         }
     }
@@ -357,14 +369,14 @@ public class EmailFixture extends SlimFixture {
         try {
             Message[] messages = {message};
             Folder fromFolder = message.getFolder();
-            Folder toFolder = message.getFolder().getStore().getFolder(toFolderPath);
+            Folder toFolder = fromFolder.getStore().getFolder(toFolderPath);
             if (!toFolder.exists() && createIfNotExist) toFolder.create(Folder.HOLDS_FOLDERS | Folder.HOLDS_MESSAGES);
             fromFolder.copyMessages(messages, toFolder);
             fromFolder.setFlags(messages, new Flags(Flags.Flag.DELETED), true);
             fromFolder.expunge();
             return true;
         } catch (MessagingException ex) {
-            throw new RuntimeException("Unable to move the message", ex);
+            throw new SlimFixtureException("Unable to move the message", ex);
         }
     }
 }
