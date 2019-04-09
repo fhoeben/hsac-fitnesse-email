@@ -30,6 +30,7 @@ public class EmailFixture extends SlimFixture {
     protected static final DateFormat DATE_TIME_FORMATTER = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     protected static final FlagTerm NON_DELETED_TERM = new FlagTerm(new Flags(Flags.Flag.DELETED), false);
     private String folder = "inbox";
+    private Folder currentFolder = null;
     private Store store;
     private Message lastMessage;
     private int folderReadWrite = Folder.READ_ONLY;
@@ -202,9 +203,9 @@ public class EmailFixture extends SlimFixture {
     protected List<Message> retrieveMessages() {
         SearchTerm searchTerm = getSearchTerm();
         try {
-            Folder f = openFolder();
-            Message[] messages = f.search(searchTerm);
-            if(messages.length == 0 ) { f.close(); return Collections.emptyList(); }
+            openCurrentFolder();
+            Message[] messages = currentFolder.search(searchTerm);
+            if(messages.length == 0 ) { closeCurrentFolder(); return Collections.emptyList(); }
             if(receivedAfter == null) return Arrays.asList(messages);
             return Arrays.stream(messages).filter(x -> {
                 try {
@@ -282,14 +283,29 @@ public class EmailFixture extends SlimFixture {
         }
     }
 
-    protected Folder openFolder() {
+    protected void openCurrentFolder() {
         try {
-            Folder inbox = store.getFolder(folder);
-            inbox.open(folderReadWrite);
-            return inbox;
+            if (currentFolder == null || !currentFolder.isOpen()) {
+                currentFolder = store.getFolder(folder);
+                currentFolder.open(folderReadWrite);
+            }
         } catch (MessagingException e) {
             throw new StopTestException("Unable to open folder: " + folder);
         }
+    }
+
+    protected void closeCurrentFolder() {
+        try {
+            if (currentFolder != null && currentFolder.isOpen()) {
+                currentFolder.close();
+            }
+        } catch (MessagingException e) {
+            throw new StopTestException("Unable to close folder: " + folder);
+        }
+    }
+    
+    protected Folder getCurrentFolder() {
+        return currentFolder;
     }
 
     protected String getBody(Message msg) {
@@ -330,6 +346,9 @@ public class EmailFixture extends SlimFixture {
     }
 
     public void setFolder(String folder) {
+        if(StringUtils.equalsIgnoreCase(this.folder, folder) == false) {
+            closeCurrentFolder();
+        }
         this.folder = folder;
     }
 
