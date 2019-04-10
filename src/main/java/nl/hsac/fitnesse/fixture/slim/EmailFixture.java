@@ -76,9 +76,10 @@ public class EmailFixture extends SlimFixture {
             throw new StopTestException("Cannot connect to mailserver", e);
         }
     }
+
     public void connectToHostWithUserAndPasswordWithWrite(String host, String username, String password) {
-       connectToHostWithUserAndPassword(host,username,password);
-       setFolderReadWrite(Folder.READ_WRITE);
+        connectToHostWithUserAndPassword(host, username, password);
+        setFolderReadWrite(Folder.READ_WRITE);
     }
 
     protected void setFolderReadWrite(int folderReadWrite) {
@@ -126,25 +127,23 @@ public class EmailFixture extends SlimFixture {
         return values;
     }
 
-    public String saveAttachmentNumber(int number)
-    {
+    public String saveAttachmentNumber(int number) {
         if (number < messageAttachments.size()) {
             return impSaveAttachment(messageAttachments.get(number));
-        }
-        else {
-            throw new SlimFixtureException(false, "There are only "+ messageAttachments.size() + " attachments");
+        } else {
+            throw new SlimFixtureException(false, "There are only " + messageAttachments.size() + " attachments");
         }
     }
 
-    public String saveAttachmentNamed(String filename)
-    {
-        for (ImapAttachment ia: messageAttachments) {
+    public String saveAttachmentNamed(String filename) {
+        for (ImapAttachment ia : messageAttachments) {
             if (StringUtils.equals(ia.getFileName(), filename)) {
                 return impSaveAttachment(ia);
             }
         }
         throw new SlimFixtureException(false, "There is no attachment called " + filename);
     }
+
     private String impSaveAttachment(ImapAttachment ia) {
         try {
             return createFile(attachmentBase, ia.getFileName(), ia.getBytes());
@@ -168,26 +167,26 @@ public class EmailFixture extends SlimFixture {
 
     private void handleParts(Part part) {
         try {
-            if (part == null) return;
-            String disposition = part.getDisposition();
-            if (Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
-                messageAttachments.add(new ImapAttachment(part));
-            } else {
-                Object content = part.getContent();
-                if (content instanceof MimeMultipart) {
-                    Multipart multipart = (Multipart) content;
-                    for (int i = 0; i < multipart.getCount(); i++) {
-                        handleParts(multipart.getBodyPart(i));
-                    }
-                } else if (content instanceof String) {
-                    if (part.isMimeType("text/html")) {
-                        messageHtml = (String)content;
-                    }
-                    else {
-                        messagePlain = (String)content;
-                    }
+            if (part != null) {
+                String disposition = part.getDisposition();
+                if (Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
+                    messageAttachments.add(new ImapAttachment(part));
                 } else {
-                    throw new SlimFixtureException(false, "Unknown content type " + content.getClass());
+                    Object content = part.getContent();
+                    if (content instanceof MimeMultipart) {
+                        Multipart multipart = (Multipart)content;
+                        for (int i = 0; i < multipart.getCount(); i++) {
+                            handleParts(multipart.getBodyPart(i));
+                        }
+                    } else if (content instanceof String) {
+                        if (part.isMimeType("text/html")) {
+                            messageHtml = (String)content;
+                        } else {
+                            messagePlain = (String)content;
+                        }
+                    } else {
+                        throw new SlimFixtureException(false, "Unknown content type " + content.getClass());
+                    }
                 }
             }
         } catch (IOException ex) {
@@ -200,7 +199,7 @@ public class EmailFixture extends SlimFixture {
     public boolean retrieveLastMessage() {
         List<Message> messages = retrieveMessages();
         boolean result = (messages != null && messages.size() > 0);
-        setLastMessage(result? messages.get(messages.size() - 1): null);
+        setLastMessage(result? messages.get(messages.size() - 1) : null);
         return result;
     }
 
@@ -209,13 +208,17 @@ public class EmailFixture extends SlimFixture {
         try {
             openCurrentFolder();
             Message[] messages = currentFolder.search(searchTerm);
-            if(messages.length == 0 ) { closeCurrentFolder(); return Collections.emptyList(); }
-            if(receivedAfter == null) return Arrays.asList(messages);
+            if (messages.length == 0) {
+                closeCurrentFolder();
+                return Collections.emptyList();
+            }
+            if (receivedAfter == null) {
+                return Arrays.asList(messages);
+            }
             return Arrays.stream(messages).filter(x -> {
                 try {
                     return x.getReceivedDate().after(receivedAfter);
-                }
-                catch (MessagingException ex) {
+                } catch (MessagingException ex) {
                     throw new RuntimeException("Unable to get received date", ex);
                 }
             }).collect(Collectors.toList());
@@ -326,7 +329,7 @@ public class EmailFixture extends SlimFixture {
 
     public void onlyMessagesReceivedAfter(String date) {
         try {
-            Date rDate = StringUtils.isEmpty(date) ? null : DATE_TIME_FORMATTER.parse(date);
+            Date rDate = StringUtils.isEmpty(date)? null : DATE_TIME_FORMATTER.parse(date);
             setReceivedAfter(rDate);
         } catch (ParseException e) {
             throw new SlimFixtureException(false, "Unable to parse date: " + date, e);
@@ -350,7 +353,7 @@ public class EmailFixture extends SlimFixture {
     }
 
     public void setFolder(String folder) {
-        if(StringUtils.equalsIgnoreCase(this.folder, folder) == false) {
+        if (StringUtils.equalsIgnoreCase(this.folder, folder) == false) {
             closeCurrentFolder();
         }
         this.folder = folder;
@@ -363,19 +366,20 @@ public class EmailFixture extends SlimFixture {
     public ArrayList<String> getFolders() {
         try {
             ArrayList<String> folders = new ArrayList<>();
-            handleListFolders(this.store.getDefaultFolder(),"",folders);
+            handleListFolders(this.store.getDefaultFolder(), "", folders);
             return folders;
-        }
-        catch (MessagingException ex) {
+        } catch (MessagingException ex) {
             throw new SlimFixtureException("Unable to get default folder", ex);
         }
     }
 
-    private void handleListFolders(Folder folder, String base, List<String> folders) throws MessagingException  {
+    private void handleListFolders(Folder folder, String base, List<String> folders) throws MessagingException {
         String name = base + folder.getName();
-        String b = name.isEmpty() ? "" : name + "/";
-        if(!name.isEmpty()) folders.add(name);
-        for(Folder f : folder.list()) {
+        String b = name.isEmpty()? "" : name + "/";
+        if (!name.isEmpty()) {
+            folders.add(name);
+        }
+        for (Folder f : folder.list()) {
             handleListFolders(f, b, folders);
         }
     }
@@ -384,8 +388,11 @@ public class EmailFixture extends SlimFixture {
         return store;
     }
 
-    public Boolean moveLastMessageToFolder(String folder ) {
-        return moveMessage(lastMessage,folder, true);
+    public Boolean moveLastMessageToFolder(String folder) {
+        if (lastMessage != null) {
+            return moveMessage(lastMessage, folder, true);
+        }
+        throw new SlimFixtureException(false, "There is no last message to move");
     }
 
     protected Boolean moveMessage(Message message, String toFolderPath, boolean createIfNotExist) {
@@ -393,7 +400,9 @@ public class EmailFixture extends SlimFixture {
             Message[] messages = {message};
             Folder fromFolder = message.getFolder();
             Folder toFolder = fromFolder.getStore().getFolder(toFolderPath);
-            if (!toFolder.exists() && createIfNotExist) toFolder.create(Folder.HOLDS_FOLDERS | Folder.HOLDS_MESSAGES);
+            if (!toFolder.exists() && createIfNotExist) {
+                toFolder.create(Folder.HOLDS_FOLDERS | Folder.HOLDS_MESSAGES);
+            }
             fromFolder.copyMessages(messages, toFolder);
             fromFolder.setFlags(messages, new Flags(Flags.Flag.DELETED), true);
             fromFolder.expunge();
