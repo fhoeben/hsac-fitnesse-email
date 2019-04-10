@@ -10,6 +10,7 @@ import java.io.InputStream;
 public class ImapAttachment {
     private InputStream stream;
     private String fileName;
+    private byte[] bytes;
 
     public ImapAttachment(Part p) throws IOException, MessagingException {
         this.stream = p.getInputStream();
@@ -20,11 +21,10 @@ public class ImapAttachment {
         return this.fileName;
     }
 
-    public InputStream getStream() {
-        return this.stream;
-    }
-
     public byte[] getBytes() throws IOException  {
-        return IOUtils.toByteArray(this.stream);
+        if (bytes == null || bytes.length == 0) {
+            bytes = IOUtils.toByteArray(this.stream);
+        }
+        return bytes;
     }
 }
