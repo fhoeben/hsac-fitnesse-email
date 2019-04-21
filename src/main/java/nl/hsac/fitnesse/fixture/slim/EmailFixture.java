@@ -6,20 +6,13 @@ import org.apache.commons.lang3.StringUtils;
 
 import javax.mail.*;
 import javax.mail.internet.MimeMultipart;
-import javax.mail.search.AndTerm;
-import javax.mail.search.ComparisonTerm;
-import javax.mail.search.FlagTerm;
-import javax.mail.search.ReceivedDateTerm;
-import javax.mail.search.RecipientStringTerm;
-import javax.mail.search.SearchTerm;
-import javax.mail.search.SubjectTerm;
+import javax.mail.search.*;
 import java.io.File;
 import java.io.IOException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 /**
@@ -52,6 +45,7 @@ public class EmailFixture extends SlimFixture {
 
     /**
      * Creates new.
+     *
      * @param protocol protocol to use.
      */
     public EmailFixture(String protocol) {
@@ -60,6 +54,7 @@ public class EmailFixture extends SlimFixture {
 
     /**
      * Creates new.
+     *
      * @param store store to use.
      */
     public EmailFixture(Store store) {
@@ -158,11 +153,15 @@ public class EmailFixture extends SlimFixture {
     }
 
     public String bodyText() {
-        return messageHtml;
+        return StringUtils.isNotBlank(messageHtml) ? messageHtml : messagePlain;
     }
 
     public String bodyPlain() {
         return messagePlain;
+    }
+
+    public String bodyHtml() {
+        return messageHtml;
     }
 
     private void handleParts(Part part) {
@@ -174,24 +173,22 @@ public class EmailFixture extends SlimFixture {
                 } else {
                     Object content = part.getContent();
                     if (content instanceof MimeMultipart) {
-                        Multipart multipart = (Multipart)content;
+                        Multipart multipart = (Multipart) content;
                         for (int i = 0; i < multipart.getCount(); i++) {
                             handleParts(multipart.getBodyPart(i));
                         }
                     } else if (content instanceof String) {
                         if (part.isMimeType("text/html")) {
-                            messageHtml = (String)content;
+                            messageHtml = (String) content;
                         } else {
-                            messagePlain = (String)content;
+                            messagePlain = (String) content;
                         }
                     } else {
                         throw new SlimFixtureException(false, "Unknown content type " + content.getClass());
                     }
                 }
             }
-        } catch (IOException ex) {
-            throw new SlimFixtureException("Unable to get body of message", ex);
-        } catch (MessagingException ex) {
+        } catch (IOException | MessagingException ex) {
             throw new SlimFixtureException("Unable to get body of message", ex);
         }
     }
@@ -199,7 +196,7 @@ public class EmailFixture extends SlimFixture {
     public boolean retrieveLastMessage() {
         List<Message> messages = retrieveMessages();
         boolean result = (messages != null && messages.size() > 0);
-        setLastMessage(result? messages.get(messages.size() - 1) : null);
+        setLastMessage(result ? messages.get(messages.size() - 1) : null);
         return result;
     }
 
@@ -274,7 +271,8 @@ public class EmailFixture extends SlimFixture {
     }
 
     protected void setLastMessage(Message lastMessage) {
-        messagePlain = messageHtml = "";
+        messagePlain = null;
+        messageHtml = null;
         messageAttachments.clear();
         this.lastMessage = lastMessage;
         handleParts(lastMessage);
@@ -315,10 +313,6 @@ public class EmailFixture extends SlimFixture {
         return currentFolder;
     }
 
-    protected String getBody(Message msg) {
-        return messageHtml;
-    }
-
     public Date getReceivedAfter() {
         return receivedAfter;
     }
@@ -329,7 +323,7 @@ public class EmailFixture extends SlimFixture {
 
     public void onlyMessagesReceivedAfter(String date) {
         try {
-            Date rDate = StringUtils.isEmpty(date)? null : DATE_TIME_FORMATTER.parse(date);
+            Date rDate = StringUtils.isEmpty(date) ? null : DATE_TIME_FORMATTER.parse(date);
             setReceivedAfter(rDate);
         } catch (ParseException e) {
             throw new SlimFixtureException(false, "Unable to parse date: " + date, e);
@@ -353,7 +347,7 @@ public class EmailFixture extends SlimFixture {
     }
 
     public void setFolder(String folder) {
-        if (StringUtils.equalsIgnoreCase(this.folder, folder) == false) {
+        if (!StringUtils.equalsIgnoreCase(this.folder, folder)) {
             closeCurrentFolder();
         }
         this.folder = folder;
@@ -375,7 +369,7 @@ public class EmailFixture extends SlimFixture {
 
     private void handleListFolders(Folder folder, String base, List<String> folders) throws MessagingException {
         String name = base + folder.getName();
-        String b = name.isEmpty()? "" : name + "/";
+        String b = name.isEmpty() ? "" : name + "/";
         if (!name.isEmpty()) {
             folders.add(name);
         }
@@ -397,7 +391,7 @@ public class EmailFixture extends SlimFixture {
 
     protected Boolean moveMessage(Message message, String toFolderPath, boolean createIfNotExist) {
         try {
-            Message[] messages = {message};
+            Message[] messages = { message };
             Folder fromFolder = message.getFolder();
             Folder toFolder = fromFolder.getStore().getFolder(toFolderPath);
             if (!toFolder.exists() && createIfNotExist) {
