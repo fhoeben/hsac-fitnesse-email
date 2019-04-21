@@ -34,7 +34,7 @@ public class EmailFixture extends SlimFixture {
 
     private String messagePlain;
     private String messageHtml;
-    private List<ImapAttachment> messageAttachments = new ArrayList();
+    private List<ImapAttachment> messageAttachments = new ArrayList<>();
 
     /**
      * Creates new fixture instance with "imaps" protocol.
