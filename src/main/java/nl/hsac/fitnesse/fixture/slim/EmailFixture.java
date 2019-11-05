@@ -405,4 +405,13 @@ public class EmailFixture extends SlimFixture {
             throw new SlimFixtureException("Unable to move the message", ex);
         }
     }
+    public void markAsDeleted() {
+        if (lastMessage != null) {
+            try {
+                lastMessage.setFlag(Flags.Flag.DELETED, true);
+            } catch (MessagingException e) {
+                throw new StopTestException("failed to mark as deleted: " + e);
+            }
+        }
+    }
 }
