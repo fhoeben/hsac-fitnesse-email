@@ -416,7 +416,8 @@ public class EmailFixture extends SlimFixture {
             } catch (MessagingException e) {
                 throw new SlimFixtureException("Failed to mark as deleted: " + e);
             }
+        } else {
+            throw new SlimFixtureException(false, "There is no last message to mark");
         }
-        throw new SlimFixtureException(false, "There is no last message to mark");
     }
 }
